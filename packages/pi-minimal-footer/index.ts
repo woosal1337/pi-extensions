@@ -1272,7 +1272,7 @@ export default function (pi: ExtensionAPI) {
             lines.push(...renderUsageLine(latestUsage, width, theme));
           }
 
-          const statusLine = renderExtensionStatuses(footerData.getExtensionStatuses());
+          const statusLine = renderExtensionStatuses(footerData.getExtensionStatuses?.() ?? new Map());
           if (statusLine) lines.push(statusLine);
 
           return lines.map((line) => truncateToWidth(line, width));
