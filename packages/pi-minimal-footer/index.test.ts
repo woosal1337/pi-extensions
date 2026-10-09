@@ -59,7 +59,6 @@ describe("footer auth directory", () => {
   });
 });
 
-// Start the footer with a fake pi and ctx, and return its status line renderer.
 async function startFooter(ctx: Record<string, unknown>) {
   const handlers = new Map<string, (event: unknown, ctx: unknown) => unknown>();
   extension({ on: (event: string, handler: any) => handlers.set(event, handler) } as any);
@@ -76,14 +75,13 @@ async function startFooter(ctx: Record<string, unknown>) {
   );
   const theme = { fg: (_color: string, text: string) => text, bold: (text: string) => text };
   const footer = factory({ requestRender() {} }, theme, { onBranchChange: () => () => {} });
-  const contextGauge = () => {
-    const line = footer.render(200).find((l: string) => l.includes("ctx "));
+  const contextGauge = (width = 200) => {
+    const line = footer.render(width).find((l: string) => l.includes("ctx "));
     return line.slice(line.indexOf("ctx "));
   };
   return { footer, contextGauge };
 }
 
-// A session whose last response used this many context tokens.
 function sessionWithResponse(contextTokens: number) {
   const usage = { input: contextTokens, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: contextTokens };
   const entries = [
@@ -99,6 +97,8 @@ function sessionWithResponse(contextTokens: number) {
   return { getEntries: () => entries, getLeafId: () => "a1" };
 }
 
+const unknownAfterCompaction = () => ({ tokens: null, contextWindow: 256000, percent: null });
+
 describe("context gauge", () => {
   test("shows pi's context usage, which includes messages after the last response", async () => {
     const { footer, contextGauge } = await startFooter({
@@ -109,19 +109,20 @@ describe("context gauge", () => {
     footer.dispose();
   });
 
-  test("shows an unknown size after a compaction, like pi's default footer", async () => {
-    // The last response before the compaction reported 304,372 tokens. pi no longer counts it.
+  test("shows an unknown size after a compaction instead of the last response", async () => {
     const { footer, contextGauge } = await startFooter({
       sessionManager: sessionWithResponse(304372),
-      getContextUsage: () => ({ tokens: null, contextWindow: 256000, percent: null }),
+      getContextUsage: unknownAfterCompaction,
     });
     expect(contextGauge()).toBe("ctx ──────────── ?/256k");
+    expect(contextGauge(20)).toBe("ctx ────────── ?");
     footer.dispose();
   });
 
   test("uses the last response when pi has no getContextUsage", async () => {
     const { footer, contextGauge } = await startFooter({ sessionManager: sessionWithResponse(73000) });
     expect(contextGauge()).toBe("ctx ━━━───────── 29% 73k/256k");
+    expect(contextGauge(20)).toBe("ctx ━━━─────── 29%");
     footer.dispose();
   });
 });

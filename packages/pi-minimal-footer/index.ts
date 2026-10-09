@@ -48,6 +48,12 @@ interface GitCache {
   behind: number;
 }
 
+interface ContextInfo {
+  percentage: number | null;
+  used: number | null;
+  total: number;
+}
+
 // ============ Usage Cache ============
 
 // Usage is cached on disk and shared by every pi instance, so N open panes
@@ -972,7 +978,6 @@ export default function (pi: ExtensionAPI) {
     options?: { barWidth?: number; includeCounts?: boolean }
   ): string {
     const barWidth = Math.max(4, options?.barWidth ?? CTX_GAUGE_WIDTH);
-    // pi reports null right after a compaction, until the next response.
     const known = percentage !== null;
     const clamped = known ? Math.max(0, Math.min(100, percentage)) : 0;
     const filled = Math.round((clamped / 100) * barWidth);
@@ -988,7 +993,6 @@ export default function (pi: ExtensionAPI) {
     const pct = known ? `${Math.round(clamped)}%` : "?";
     let counts = "";
     if (options?.includeCounts !== false && total) {
-      // Same as pi's default footer: "?/256k" while the size is unknown.
       if (!known) counts = `/${formatTokenCount(total)}`;
       else if (used != null) counts = ` ${formatTokenCount(used)}/${formatTokenCount(total)}`;
     }
@@ -1053,18 +1057,6 @@ export default function (pi: ExtensionAPI) {
     return context.thinkingLevel || "off";
   }
 
-  interface ContextInfo {
-    /** null while pi does not know the context size. */
-    percentage: number | null;
-    used: number | null;
-    total: number;
-  }
-
-  /**
-   * Context usage as pi's default footer shows it. pi skips usage from before
-   * the latest compaction, and from aborted and failed responses. It adds an
-   * estimate for the messages after the last response.
-   */
   function getContextInfo(ctx: any): ContextInfo {
     if (typeof ctx.getContextUsage !== "function") return getLastResponseContextInfo(ctx);
     const usage = ctx.getContextUsage();
@@ -1072,7 +1064,6 @@ export default function (pi: ExtensionAPI) {
     return { percentage: usage.percent, used: usage.tokens, total: usage.contextWindow };
   }
 
-  /** Fallback for pi versions without ctx.getContextUsage(): usage of the last response. */
   function getLastResponseContextInfo(ctx: any): ContextInfo {
     const model = ctx.model;
     const contextWindow = model?.contextWindow ?? 0;
