@@ -59,7 +59,7 @@ describe("footer auth directory", () => {
   });
 });
 
-async function startFooter(ctx: Record<string, unknown>) {
+async function startFooter(ctx: Record<string, unknown>, statuses = new Map<string, string>()) {
   const handlers = new Map<string, (event: unknown, ctx: unknown) => unknown>();
   extension({ on: (event: string, handler: any) => handlers.set(event, handler) } as any);
   let factory: any;
@@ -74,7 +74,10 @@ async function startFooter(ctx: Record<string, unknown>) {
     },
   );
   const theme = { fg: (_color: string, text: string) => text, bold: (text: string) => text };
-  const footer = factory({ requestRender() {} }, theme, { onBranchChange: () => () => {} });
+  const footer = factory({ requestRender() {} }, theme, {
+    onBranchChange: () => () => {},
+    getExtensionStatuses: () => statuses,
+  });
   const contextGauge = (width = 200) => {
     const line = footer.render(width).find((l: string) => l.includes("ctx "));
     return line.slice(line.indexOf("ctx "));
@@ -123,6 +126,31 @@ describe("context gauge", () => {
     const { footer, contextGauge } = await startFooter({ sessionManager: sessionWithResponse(73000) });
     expect(contextGauge()).toBe("ctx ━━━───────── 29% 73k/256k");
     expect(contextGauge(20)).toBe("ctx ━━━─────── 29%");
+    footer.dispose();
+  });
+});
+
+describe("extension statuses", () => {
+  const getContextUsage = () => ({ tokens: 9000, contextWindow: 256000, percent: (9000 / 256000) * 100 });
+
+  test("shows extension statuses on their own line, sorted by key", async () => {
+    const statuses = new Map([
+      ["tps", "TPS: 74.2 tok/s"],
+      ["herdr-worktree-jump", "creating\n\tworktree"],
+    ]);
+    const { footer } = await startFooter({ getContextUsage }, statuses);
+    const lines = footer.render(200);
+    expect(lines.at(-1)).toBe("creating worktree TPS: 74.2 tok/s");
+    statuses.delete("herdr-worktree-jump");
+    expect(footer.render(200).at(-1)).toBe("TPS: 74.2 tok/s");
+    footer.dispose();
+  });
+
+  test("adds no line when no extension sets a status", async () => {
+    const { footer } = await startFooter({ getContextUsage });
+    const lines = footer.render(200);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("ctx ");
     footer.dispose();
   });
 });
