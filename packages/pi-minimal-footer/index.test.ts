@@ -69,7 +69,7 @@ describe("extension statuses", () => {
     footer.dispose();
   });
 
-  test("adds no line when no extension sets a status", async () => {
+  test("adds no line without extension statuses", async () => {
     for (const statuses of [new Map<string, string>(), undefined]) {
       const footer = await startFooterWithStatuses(statuses);
       const lines = footer.render(200);
